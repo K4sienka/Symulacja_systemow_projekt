@@ -2,46 +2,37 @@ import math
 import random
 
 import pygame
+import config as _cfg
 
-from config import (
-    SPEED,
-    SHOP_X,
-    SHOP_Y,
-    SHOP_RADIUS,
-    SHOP_VISITOR_SHARE,
-    SHOP_VISIT_PROBABILITY,
-    SHOP_STAY_TIME,
-    SHOP_COOLDOWN,
-    SHOP_CAPACITY,
-    SHOP_INFECTION_RADIUS,
-    SHOP_INFECTION_PROBABILITY,
-    INFECTION_RADIUS,
-    INFECTION_PROBABILITY,
-)
+from simulation.scenarios.base_scenario import BaseScenario
+from simulation.utils import distance
 
 
-class ShopScenario:
+class ShopScenario(BaseScenario):
     name = "shop"
 
     def __init__(self):
-        self.initialized = False
+        super().__init__()
+        self.speed                   = _cfg.SPEED
+        self.shop_x                  = _cfg.SHOP_X
+        self.shop_y                  = _cfg.SHOP_Y
+        self.shop_radius             = _cfg.SHOP_RADIUS
+        self.visitor_share           = _cfg.SHOP_VISITOR_SHARE
+        self.visit_prob              = _cfg.SHOP_VISIT_PROBABILITY
+        self.stay_time               = _cfg.SHOP_STAY_TIME
+        self.cooldown                = _cfg.SHOP_COOLDOWN
+        self.capacity                = _cfg.SHOP_CAPACITY
+        self.shop_infection_radius   = _cfg.SHOP_INFECTION_RADIUS
+        self.shop_infection_probability = _cfg.SHOP_INFECTION_PROBABILITY
 
-    def initialize_people(self, model):
+    def initialize(self, model):
         for person in model.people:
-            person.can_visit_shop = random.random() < SHOP_VISITOR_SHARE
-            person.shop_cooldown = random.randint(0, SHOP_COOLDOWN)
-
-        self.initialized = True
+            person.can_visit_shop = random.random() < self.visitor_share
+            person.shop_cooldown  = random.randint(0, self.cooldown)
 
     def before_update(self, model):
-        if not self.initialized:
-            self.initialize_people(model)
-
-        active_shop_people = sum(
-            1
-            for person in model.people
-            if person.target_x is not None or self.is_in_shop(person)
-        )
+        # Count people currently inside the shop (timer active)
+        active_shop_people = sum(1 for p in model.people if p.shop_timer > 0)
 
         for person in model.people:
             if not person.can_visit_shop:
@@ -50,64 +41,55 @@ class ShopScenario:
             if person.shop_cooldown > 0:
                 person.shop_cooldown -= 1
 
+            # Inside shop: wander slowly, count down timer
             if person.shop_timer > 0:
                 person.shop_timer -= 1
                 person.vx = random.uniform(-0.4, 0.4)
                 person.vy = random.uniform(-0.4, 0.4)
 
                 if person.shop_timer == 0:
-                    person.shop_cooldown = SHOP_COOLDOWN
-                    person.vx = random.uniform(-SPEED, SPEED)
-                    person.vy = random.uniform(-SPEED, SPEED)
-
-                continue
-
-            if (
-                person.target_x is None
-                and person.shop_cooldown == 0
-                and active_shop_people < SHOP_CAPACITY
-                and random.random() < SHOP_VISIT_PROBABILITY
-            ):
-                person.target_x = SHOP_X
-                person.target_y = SHOP_Y
-                active_shop_people += 1
-
-            if person.target_x is not None:
-                dx = SHOP_X - person.x
-                dy = SHOP_Y - person.y
-                distance = math.sqrt(dx**2 + dy**2)
-
-                if distance <= SHOP_RADIUS:
+                    # Teleport back to saved pre-shop position
+                    person.x = person.target_x
+                    person.y = person.target_y
                     person.target_x = None
                     person.target_y = None
-                    person.shop_timer = SHOP_STAY_TIME
+                    person.vx = random.uniform(-self.speed, self.speed)
+                    person.vy = random.uniform(-self.speed, self.speed)
+                    person.shop_cooldown = self.cooldown
+                continue
 
-                elif distance > 0:
-                    person.vx = SPEED * dx / distance
-                    person.vy = SPEED * dy / distance
+            # Decide to visit shop
+            if (
+                person.shop_cooldown == 0
+                and active_shop_people < self.capacity
+                and random.random() < self.visit_prob
+            ):
+                # Save current position for return teleport
+                person.target_x = person.x
+                person.target_y = person.y
+                # Teleport to random spot inside shop
+                angle = random.uniform(0, 2 * math.pi)
+                r = random.uniform(0, self.shop_radius * 0.85)
+                person.x = self.shop_x + r * math.cos(angle)
+                person.y = self.shop_y + r * math.sin(angle)
+                person.shop_timer = self.stay_time
+                person.vx = random.uniform(-0.4, 0.4)
+                person.vy = random.uniform(-0.4, 0.4)
+                active_shop_people += 1
 
-    def can_move(self, person):
-        return True
+    def _is_in_shop(self, person) -> bool:
+        return distance(person.x, person.y, self.shop_x, self.shop_y) <= self.shop_radius
 
-    def can_infect(self, infected_person):
-        return True
+    def get_infection_radius(self, infected, susceptible) -> float:
+        if self._is_in_shop(infected) and self._is_in_shop(susceptible):
+            return self.shop_infection_radius
+        return self.infection_radius
 
-    def is_in_shop(self, person):
-        distance = math.sqrt((person.x - SHOP_X) ** 2 + (person.y - SHOP_Y) ** 2)
-        return distance <= SHOP_RADIUS
-
-    def get_infection_radius(self, infected_person, susceptible_person):
-        if self.is_in_shop(infected_person) and self.is_in_shop(susceptible_person):
-            return SHOP_INFECTION_RADIUS
-
-        return INFECTION_RADIUS
-
-    def get_infection_probability(self, infected_person, susceptible_person):
-        if self.is_in_shop(infected_person) and self.is_in_shop(susceptible_person):
-            return SHOP_INFECTION_PROBABILITY
-
-        return INFECTION_PROBABILITY
+    def get_infection_probability(self, infected, susceptible) -> float:
+        if self._is_in_shop(infected) and self._is_in_shop(susceptible):
+            return self.shop_infection_probability
+        return self.infection_probability
 
     def draw_environment(self, screen):
-        pygame.draw.circle(screen, (230, 225, 170), (SHOP_X, SHOP_Y), SHOP_RADIUS)
-        pygame.draw.circle(screen, (120, 110, 60), (SHOP_X, SHOP_Y), SHOP_RADIUS, 3)
+        pygame.draw.circle(screen, (210, 195, 130), (self.shop_x, self.shop_y), self.shop_radius)
+        pygame.draw.circle(screen, (180, 155,  60), (self.shop_x, self.shop_y), self.shop_radius, 3)

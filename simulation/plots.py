@@ -21,4 +21,4 @@ def show_plot(history):
     plt.grid(True)
 
     plt.savefig(PLOT_PATH, dpi=300, bbox_inches="tight")
-    plt.show()
+    plt.close()

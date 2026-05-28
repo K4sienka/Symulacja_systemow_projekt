@@ -1,13 +1,9 @@
 import random
-import math
 
-from config import (
-    POPULATION_SIZE,
-    INITIAL_INFECTED,
-    RECOVERY_TIME,
-)
+import config as _cfg
 
-from simulation.person import Person
+from simulation.person import Person, Status
+from simulation.utils import distance
 
 
 class SimulationModel:
@@ -15,17 +11,19 @@ class SimulationModel:
         self.scenario = scenario
         self.people = []
 
-        for i in range(POPULATION_SIZE):
-            if i < INITIAL_INFECTED:
-                self.people.append(Person(status="I"))
-            else:
-                self.people.append(Person(status="S"))
+        population_size = _cfg.POPULATION_SIZE
+        initial_infected = _cfg.INITIAL_INFECTED
+        self._recovery_time = _cfg.RECOVERY_TIME
 
-        self.history = {
-            "S": [],
-            "I": [],
-            "R": [],
-        }
+        for i in range(population_size):
+            if i < initial_infected:
+                self.people.append(Person(status=Status.I))
+            else:
+                self.people.append(Person(status=Status.S))
+
+        self.history = {"S": [], "I": [], "R": []}
+
+        scenario.initialize(self)
 
     def update(self):
         self.scenario.before_update(self)
@@ -39,40 +37,37 @@ class SimulationModel:
         self.save_history()
 
     def spread_infection(self):
-        infected_people = [p for p in self.people if p.status == "I"]
-        susceptible_people = [p for p in self.people if p.status == "S"]
+        infected_people = [p for p in self.people if p.status == Status.I]
+        susceptible_people = [p for p in self.people if p.status == Status.S]
 
         for infected in infected_people:
             if not self.scenario.can_infect(infected):
                 continue
 
             for susceptible in susceptible_people:
-                distance = math.sqrt(
-                    (infected.x - susceptible.x) ** 2
-                    + (infected.y - susceptible.y) ** 2
-                )
+                dist = distance(infected.x, infected.y, susceptible.x, susceptible.y)
 
                 infection_radius = self.scenario.get_infection_radius(infected, susceptible)
                 infection_probability = self.scenario.get_infection_probability(infected, susceptible)
 
-                if distance <= infection_radius:
+                if dist <= infection_radius:
                     if random.random() < infection_probability:
-                        susceptible.status = "I"
+                        susceptible.status = Status.I
                         susceptible.infected_time = 0
 
     def recover_people(self):
         for person in self.people:
-            if person.status == "I":
+            if person.status == Status.I:
                 person.infected_time += 1
 
-                if person.infected_time >= RECOVERY_TIME:
-                    person.status = "R"
+                if person.infected_time >= self._recovery_time:
+                    person.status = Status.R
                     person.is_quarantined = False
 
     def save_history(self):
-        self.history["S"].append(self.count_status("S"))
-        self.history["I"].append(self.count_status("I"))
-        self.history["R"].append(self.count_status("R"))
+        self.history["S"].append(self.count_status(Status.S))
+        self.history["I"].append(self.count_status(Status.I))
+        self.history["R"].append(self.count_status(Status.R))
 
     def count_status(self, status):
         return sum(1 for person in self.people if person.status == status)

@@ -3,7 +3,7 @@ from pathlib import Path
 import pygame
 from PIL import Image
 
-from config import RESULTS_DIR, GIF_PATH, GIF_FRAME_INTERVAL
+from config import RESULTS_DIR, GIF_PATH, GIF_FRAME_INTERVAL, GIF_FRAME_DURATION
 
 
 class GifRecorder:
@@ -32,6 +32,6 @@ class GifRecorder:
             GIF_PATH,
             save_all=True,
             append_images=self.frames[1:],
-            duration=80,
+            duration=GIF_FRAME_DURATION,
             loop=0,
         )

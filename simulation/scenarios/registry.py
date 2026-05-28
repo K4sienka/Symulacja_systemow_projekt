@@ -11,5 +11,21 @@ def get_scenario(name):
         from simulation.scenarios.shop import ShopScenario
         return ShopScenario()
 
-    available = "basic, quarantine, shop"
-    raise ValueError(f"Nieznany scenariusz: {name}. Dostępne scenariusze: {available}")
+    if name == "communities":
+        from simulation.scenarios.communities import CommunitiesScenario
+        return CommunitiesScenario()
+
+    if name == "mobility_restrictions":
+        from simulation.scenarios.mobility_restrictions import MobilityRestrictionsScenario
+        return MobilityRestrictionsScenario()
+
+    if name == "social_distancing":
+        from simulation.scenarios.social_distancing import SocialDistancingScenario
+        return SocialDistancingScenario()
+
+    from pathlib import Path
+    available = sorted(
+        p.stem
+        for p in (Path(__file__).parents[2] / "config" / "scenarios").glob("*.yaml")
+    )
+    raise ValueError(f"Nieznany scenariusz: '{name}'. Dostępne: {', '.join(available)}")
