@@ -3,20 +3,22 @@ from pathlib import Path
 import pygame
 from PIL import Image
 
-from config import RESULTS_DIR, GIF_PATH, GIF_FRAME_INTERVAL, GIF_FRAME_DURATION
+import config as _cfg
 
 
 class GifRecorder:
     def __init__(self):
         self.frames = []
         self.step = 0
+        self._frame_interval = _cfg.GIF_FRAME_INTERVAL
+        self._frame_duration = _cfg.GIF_FRAME_DURATION
 
-        Path(RESULTS_DIR).mkdir(exist_ok=True)
+        Path(_cfg.RESULTS_DIR).mkdir(exist_ok=True)
 
     def capture(self, screen):
         self.step += 1
 
-        if self.step % GIF_FRAME_INTERVAL != 0:
+        if self.step % self._frame_interval != 0:
             return
 
         image_data = pygame.image.tostring(screen, "RGB")
@@ -29,9 +31,9 @@ class GifRecorder:
             return
 
         self.frames[0].save(
-            GIF_PATH,
+            _cfg.GIF_PATH,
             save_all=True,
             append_images=self.frames[1:],
-            duration=GIF_FRAME_DURATION,
+            duration=self._frame_duration,
             loop=0,
         )
